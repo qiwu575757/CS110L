@@ -5,16 +5,31 @@ mod process;
 mod ps_utils;
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
+
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Usage: {} <name or pid of target>", args[0]);
         std::process::exit(1);
     }
-    #[allow(unused)] // TODO: delete this line for Milestone 1
     let target = &args[1];
 
-    // TODO: Milestone 1: Get the target Process using psutils::get_target()
-    unimplemented!();
+    // Milestones 1
+    let process = ps_utils::get_target(target).expect("Get target error.");
+    match process {
+        Some(process) => { // 通过 Some进行 unwrap更好
+            process.print();
+            let child_process = ps_utils::get_child_processes(process.pid).expect("Get child process error");
+            for child in child_process.iter() {
+                child.print();
+            }
+        }
+        None => {
+            println!("Target {} did not match any running PIDs or executables", target);
+            std::process::exit(1);
+        }
+    }
+    
 }
 
 #[cfg(test)]
