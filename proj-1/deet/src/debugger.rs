@@ -67,7 +67,10 @@ impl Debugger {
                                 println!("Child exited due to signal {}", signal);
                                 self.inferior = None;
                             },
-                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                            Status::Stopped(signal, rip) => {
+                                println!("Child stopped (signal {})", signal);
+                                println!("Stopped at {}", self.debug_data.get_line_from_addr(rip).unwrap());
+                            },
                         }
                     } else {
                         println!("Error starting subprocess");
@@ -94,7 +97,10 @@ impl Debugger {
                                 println!("Child exited due to signal {}", signal);
                                 self.inferior = None;
                             },
-                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                            Status::Stopped(signal, rip) => {
+                                println!("Child stopped (signal {})", signal);
+                                println!("Stopped at {}", self.debug_data.get_line_from_addr(rip).unwrap());
+                            },
                         }
                     }
                 }
