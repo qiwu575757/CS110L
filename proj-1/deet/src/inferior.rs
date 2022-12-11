@@ -5,6 +5,7 @@ use nix::unistd::Pid;
 use std::os::unix::process::CommandExt;
 use std::process::Child;
 use std::process::Command;
+use crate::dwarf_data::{DwarfData, Error as DwarfError};
 
 pub enum Status {
     /// Indicates inferior stopped. Contains the signal that stopped the process, as well as the
@@ -76,5 +77,32 @@ impl Inferior {
         self.child.kill().unwrap();
         self.wait(None).unwrap();
         println!("Killing running inferior (pid {})", self.pid());
+    }
+
+    pub fn print_backtrace(&self, debug_data: &DwarfData) -> Result<(), nix::Error> {
+        // instruction_ptr = %rip
+        // base_ptr = %rbp
+        // while true:
+        //     print function/line number for instruction_ptr
+        //     if function == "main":
+        //         break
+        //     instruction_ptr = read memory at (base_ptr + 8)
+        //     base_ptr = read memory at base_ptr
+
+        let regs = ptrace::getregs(self.pid())?;
+        let mut rip = regs.rip as usize;
+        let mut rbp = regs.rbp as usize;
+        loop {
+            let _function = debug_data.get_function_from_addr(rip).unwrap();
+            let _line = debug_data.get_line_from_addr(rip).unwrap();
+            println!("{} ({})", _function, _line);
+            if _function == "main" {
+                break;
+            }
+            rip = ptrace::read(self.pid(), (rbp+8) as ptrace::AddressType)? as usize;
+            rbp = ptrace::read(self.pid(), rbp as ptrace::AddressType)? as usize;
+        }
+
+        Ok(())
     }
 }
