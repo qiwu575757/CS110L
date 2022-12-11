@@ -44,12 +44,6 @@ impl Inferior {
         let child = cmd.spawn().ok()?;
         let inferior = Inferior{child : child};
 
-        match inferior.continue_run(None).ok()? {
-            Status::Exited(exit_code) => println!("Child exited (status {})", exit_code),
-            Status::Signaled(signal) => println!("Child exited due to signal {}", signal),
-            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
-        }
-
         Some(inferior)
     }
 
@@ -76,5 +70,11 @@ impl Inferior {
     pub fn continue_run(&self, signal: Option<signal::Signal>) -> Result<Status, nix::Error> {
         ptrace::cont(self.pid(), signal)?;
         self.wait(None)
+    }
+    
+    pub fn kill(&mut self) {
+        self.child.kill().unwrap();
+        self.wait(None).unwrap();
+        println!("Killing running inferior (pid {})", self.pid());
     }
 }
