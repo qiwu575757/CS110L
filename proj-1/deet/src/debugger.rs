@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::debugger_command::DebuggerCommand;
 use crate::inferior::Inferior;
 use rustyline::error::ReadlineError;
@@ -20,7 +22,7 @@ pub struct Debugger {
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
-    breakpoints: Vec<usize>,
+    breakpoints_map: HashMap<usize, u8>, // addr: usize --- orig_byte: u8
 }
 
 impl Debugger {
@@ -53,7 +55,7 @@ impl Debugger {
             readline,
             inferior: None,
             debug_data: debug_data,
-            breakpoints: Vec::new(),
+            breakpoints_map: HashMap::new(),
         }
     }
 
@@ -66,13 +68,13 @@ impl Debugger {
                         self.inferior.as_mut().unwrap().kill();
                         self.inferior = None;
                     }
-                    if let Some(inferior) = Inferior::new(&self.target, &args, &self.breakpoints) {
+                    if let Some(inferior) = Inferior::new(&self.target, &args, &mut self.breakpoints_map) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         // TODO (milestone 1): make the inferior run
                         // You may use self.inferior.as_mut().unwrap() to get a mutable reference
                         // to the Inferior object
-                        match self.inferior.as_mut().unwrap().continue_run(None).unwrap() {
+                        match self.inferior.as_mut().unwrap().continue_run(None, &mut self.breakpoints_map).unwrap() {
                             Status::Exited(exit_code) => {
                                 println!("Child exited (status {})", exit_code);
                                 self.inferior = None;
@@ -102,7 +104,7 @@ impl Debugger {
                     if self.inferior.is_none() {
                         println!("Error continuing precess when no inferior is running");
                     } else {
-                        match self.inferior.as_mut().unwrap().continue_run(None).unwrap() {
+                        match self.inferior.as_mut().unwrap().continue_run(None, &mut self.breakpoints_map).unwrap() {
                             Status::Exited(exit_code) => {
                                 println!("Child exited (status {})", exit_code);
                                 self.inferior = None;
@@ -129,13 +131,17 @@ impl Debugger {
 
                     if let Some(location) = parse_address(&addr[1..]) {
                         if self.inferior.is_some() {
-                            if self.inferior.as_mut().unwrap().write_byte(location, 0xcc).ok().is_none(){
-                                println!("Chance instruction error.");
+                            if let Ok(orig_byte) = self.inferior.as_mut().unwrap().write_byte(location, 0xcc){
+                                self.breakpoints_map.insert(location, orig_byte);
+                            } else {
+                                println!("Change instruction error.");
                                 return ;
                             }
+                        } else {
+                            // the inferior is none and it will be init when be created
+                            self.breakpoints_map.insert(location, 0);
                         }
-                        println!("Set breakpoint {} at {:#x}", self.breakpoints.len(), location);
-                        self.breakpoints.push(location);
+                        println!("Set breakpoint {} at {:#x}", self.breakpoints_map.len()-1, location);
                     } else {
                         println!("Invalid breakpoint address.");
                         return ;
