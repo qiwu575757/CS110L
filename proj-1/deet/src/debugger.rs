@@ -124,28 +124,40 @@ impl Debugger {
                     self.inferior.as_mut().unwrap().print_backtrace(&self.debug_data).unwrap();
                 }
                 DebuggerCommand::Breakpoint(addr) => {
-                    if !addr.starts_with("*") {
-                        println!("Address doesn't start with *.");
+                    let location;
+                    if addr.starts_with("*") {
+                        if let Some(address) = parse_address(&addr[1..]) {
+                            location = address;
+                        } else {
+                            println!("Invalid breakpoint address.");
+                            return;
+                        }
+                    } else if let Some(line) = usize::from_str_radix(&addr, 10).ok() {
+                        // 猜测是本机环境问题导致无法使用行号设断点 
+                        if let Some(address) = self.debug_data.get_addr_for_line(None, line) {
+                            location = address;
+                        } else {
+                            println!("Invalid breakpoint line.");
+                            return;
+                        }
+                    } else if let Some(address) = self.debug_data.get_addr_for_function(None, &addr) {
+                        location = address;
+                    } else {
                         return;
                     }
-
-                    if let Some(location) = parse_address(&addr[1..]) {
-                        if self.inferior.is_some() {
-                            if let Ok(orig_byte) = self.inferior.as_mut().unwrap().write_byte(location, 0xcc){
-                                self.breakpoints_map.insert(location, orig_byte);
-                            } else {
-                                println!("Change instruction error.");
-                                return ;
-                            }
+                    
+                    if self.inferior.is_some() {
+                        if let Ok(orig_byte) = self.inferior.as_mut().unwrap().write_byte(location, 0xcc){
+                            self.breakpoints_map.insert(location, orig_byte);
                         } else {
-                            // the inferior is none and it will be init when be created
-                            self.breakpoints_map.insert(location, 0);
+                            println!("Change instruction error.");
+                            return ;
                         }
-                        println!("Set breakpoint {} at {:#x}", self.breakpoints_map.len()-1, location);
-                    } else {
-                        println!("Invalid breakpoint address.");
-                        return ;
+                    } else {   
+                        // the inferior is none and it will be init when be created
+                        self.breakpoints_map.insert(location, 0);
                     }
+                    println!("Set breakpoint {} at {:#x}", self.breakpoints_map.len()-1, location);
                 }
             }
         }
